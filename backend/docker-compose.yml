@@ -1,0 +1,69 @@
+version: '3.8' # Compose version
+
+services:
+  product-service: # Catalog
+    build: ./product-service
+    ports:
+      - "5001:5001" # Host:Container
+    environment:
+      - FLASK_ENV=production # Flask config
+      - DATABASE_URL=sqlite:///products.db # SQLite path
+    volumes:
+      - ./product-service/data:/app/data # Persist DB
+    networks:
+      - stylehub-network
+
+  user-service: # Auth
+    build: ./user-service
+    ports:
+      - "5002:5002"
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=sqlite:///users.db
+      - JWT_SECRET_KEY=your-secret-key-change-in-production # Replace for prod
+    volumes:
+      - ./user-service/data:/app/data
+    networks:
+      - stylehub-network
+
+  cart-service: # Cart
+    build: ./cart-service
+    ports:
+      - "5003:5003"
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=sqlite:///cart.db
+      - PRODUCT_SERVICE_URL=http://product-service:5001 # Internal DNS name
+    volumes:
+      - ./cart-service/data:/app/data
+    networks:
+      - stylehub-network
+    depends_on:
+      - product-service # Ensure product-service starts first
+
+  order-service: # Orders
+    build: ./order-service
+    ports:
+      - "5004:5004"
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=sqlite:///orders.db
+      - CART_SERVICE_URL=http://cart-service:5003 # Internal DNS name
+      - USER_SERVICE_URL=http://user-service:5002
+    volumes:
+      - ./order-service/data:/app/data
+    networks:
+      - stylehub-network
+    depends_on:
+      - cart-service # Ensure deps start first
+      - user-service
+
+networks:
+  stylehub-network: # Shared bridge network
+    driver: bridge
+
+volumes:
+  product-data:
+  user-data:
+  cart-data:
+  order-data:

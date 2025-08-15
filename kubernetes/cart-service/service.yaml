@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: stylehub-cart-service
+  namespace: stylehub
+  labels:
+    app: stylehub-cart-service
+    component: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8083
+    targetPort: 8083
+    protocol: TCP
+    name: http
+  selector:
+    app: stylehub-cart-service

@@ -1,0 +1,372 @@
+name: StyleHub CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+env:
+  DOCKER_REGISTRY: docker.io
+  IMAGE_TAG: ${{ github.sha }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+  KUBECONFIG: ${{ secrets.KUBECONFIG }}
+  ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+  ARGOCD_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+
+jobs:
+  # Code Quality Analysis
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript type checking
+        run: npx tsc --noEmit
+
+      - name: Setup SonarQube Scanner
+        uses: sonarqube-quality-gate-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          scannerHome: ${{ github.workspace }}/sonar-scanner
+          args: >
+            -Dsonar.projectKey=stylehub
+            -Dsonar.sources=src
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+            -Dsonar.testExecutionReportPaths=test-report.xml
+
+  # Backend Code Quality
+  backend-quality:
+    name: Backend Code Quality
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [product-service, user-service, cart-service, order-service]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: backend/${{ matrix.service }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8 black isort mypy pytest pytest-cov
+
+      - name: Run linting
+        working-directory: backend/${{ matrix.service }}
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          black --check .
+          isort --check-only .
+
+      - name: Run type checking
+        working-directory: backend/${{ matrix.service }}
+        run: mypy .
+
+      - name: Run tests
+        working-directory: backend/${{ matrix.service }}
+        run: |
+          pytest --cov=. --cov-report=xml --cov-report=html
+
+  # Security Scanning
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Bandit security linter
+        run: |
+          pip install bandit
+          bandit -r backend/ -f json -o bandit-report.json
+
+  # Build and Test Frontend
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: [code-quality, security-scan]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --coverage --watchAll=false
+
+      - name: Build application
+        run: npm run build
+
+      - name: Build Docker image
+        run: |
+          docker build -t $DOCKER_REGISTRY/$DOCKER_USERNAME/stylehub-ui:$IMAGE_TAG .
+          docker build -t $DOCKER_REGISTRY/$DOCKER_USERNAME/stylehub-ui:latest .
+
+      - name: Run Trivy vulnerability scanner on image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '$DOCKER_REGISTRY/$DOCKER_USERNAME/stylehub-ui:$IMAGE_TAG'
+          format: 'sarif'
+          output: 'trivy-image-results.sarif'
+
+      - name: Upload Trivy image scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-image-results.sarif'
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push Docker image
+        run: |
+          docker push $DOCKER_REGISTRY/$DOCKER_USERNAME/stylehub-ui:$IMAGE_TAG
+          docker push $DOCKER_REGISTRY/$DOCKER_USERNAME/stylehub-ui:latest
+
+  # Build and Test Backend Services
+  build-backend:
+    name: Build Backend Services
+    runs-on: ubuntu-latest
+    needs: [backend-quality, security-scan]
+    strategy:
+      matrix:
+        service: [product-service, user-service, cart-service, order-service]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: backend/${{ matrix.service }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        working-directory: backend/${{ matrix.service }}
+        run: pytest --cov=. --cov-report=xml
+
+      - name: Build Docker image
+        working-directory: backend/${{ matrix.service }}
+        run: |
+          docker build -t $DOCKER_REGISTRY/$DOCKER_USERNAME/stylehub-${{ matrix.service }}:$IMAGE_TAG .
+          docker build -t $DOCKER_REGISTRY/$DOCKER_USERNAME/stylehub-${{ matrix.service }}:latest .
+
+      - name: Run Trivy vulnerability scanner on image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '$DOCKER_REGISTRY/$DOCKER_USERNAME/stylehub-${{ matrix.service }}:$IMAGE_TAG'
+          format: 'sarif'
+          output: 'trivy-image-results.sarif'
+
+      - name: Upload Trivy image scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-image-results.sarif'
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push Docker image
+        run: |
+          docker push $DOCKER_REGISTRY/$DOCKER_USERNAME/stylehub-${{ matrix.service }}:$IMAGE_TAG
+          docker push $DOCKER_REGISTRY/$DOCKER_USERNAME/stylehub-${{ matrix.service }}:latest
+
+  # Update Kubernetes Manifests
+  update-k8s-manifests:
+    name: Update Kubernetes Manifests
+    runs-on: ubuntu-latest
+    needs: [build-frontend, build-backend]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update image tags in kustomization
+        run: |
+          # Update image tags in kustomization.yaml
+          sed -i "s/newTag: \${IMAGE_TAG}/newTag: $IMAGE_TAG/g" kubernetes/kustomization.yaml
+          sed -i "s/\${DOCKER_USERNAME}/$DOCKER_USERNAME/g" kubernetes/kustomization.yaml
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add kubernetes/kustomization.yaml
+          git commit -m "Update image tags to $IMAGE_TAG" || exit 0
+          git push
+
+  # Deploy to Kubernetes via ArgoCD
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: [update-k8s-manifests]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup ArgoCD CLI
+        run: |
+          curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          install -m 555 argocd-linux-amd64 /usr/local/bin/argocd
+          rm argocd-linux-amd64
+
+      - name: Login to ArgoCD
+        run: |
+          argocd login $ARGOCD_SERVER --username admin --password $ARGOCD_TOKEN --insecure
+
+      - name: Sync ArgoCD application
+        run: |
+          argocd app sync stylehub --prune --force
+
+      - name: Wait for deployment
+        run: |
+          argocd app wait stylehub --health --timeout 300
+
+  # Integration Tests
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for services to be ready
+        run: |
+          # Wait for all services to be ready
+          kubectl wait --for=condition=ready pod -l app=stylehub-ui -n stylehub --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=stylehub-product-service -n stylehub --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=stylehub-user-service -n stylehub --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=stylehub-cart-service -n stylehub --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=stylehub-order-service -n stylehub --timeout=300s
+
+      - name: Run integration tests
+        run: |
+          # Run integration tests against deployed services
+          npm run test:integration
+
+      - name: Health check
+        run: |
+          # Verify all services are responding
+          curl -f http://stylehub.local/health || exit 1
+          curl -f http://stylehub.local/api/products || exit 1
+
+  # Performance Tests
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run performance tests
+        run: |
+          # Run k6 performance tests
+          npm run test:performance
+
+  # Notifications
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [integration-tests, performance-tests]
+    if: always()
+    steps:
+      - name: Notify Slack on success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: '✅ StyleHub deployment successful!'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: '❌ StyleHub deployment failed!'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+
+

@@ -1,0 +1,664 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  kubernetes-cluster-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Kubernetes Cluster Overview",
+        "tags": ["kubernetes", "cluster", "overview"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Cluster Nodes",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "count(kube_node_info)",
+                "legendFormat": "Total Nodes"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "mappings": [],
+                "thresholds": {
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    }
+                  ]
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "Total Pods",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "count(kube_pod_info)",
+                "legendFormat": "Total Pods"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 6,
+              "y": 0
+            }
+          },
+          {
+            "id": 3,
+            "title": "Running Pods",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "count(kube_pod_status_phase{phase=\"Running\"})",
+                "legendFormat": "Running Pods"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 12,
+              "y": 0
+            }
+          },
+          {
+            "id": 4,
+            "title": "Failed Pods",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "count(kube_pod_status_phase{phase=\"Failed\"})",
+                "legendFormat": "Failed Pods"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 18,
+              "y": 0
+            }
+          },
+          {
+            "id": 5,
+            "title": "Node CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+                "legendFormat": "{{instance}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 8
+            }
+          },
+          {
+            "id": 6,
+            "title": "Node Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "100 - ((node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100)",
+                "legendFormat": "{{instance}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 8
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+  kubernetes-pods-detail.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Kubernetes Pods Detail",
+        "tags": ["kubernetes", "pods", "detail"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Pod Status by Namespace",
+            "type": "piechart",
+            "targets": [
+              {
+                "expr": "count by (namespace, phase) (kube_pod_status_phase)",
+                "legendFormat": "{{namespace}} - {{phase}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "Pod Restarts",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "increase(kube_pod_container_status_restarts_total[1h])",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 0
+            }
+          },
+          {
+            "id": 3,
+            "title": "Container CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(container_cpu_usage_seconds_total{container!=\"\"}[5m])) by (pod, container)",
+                "legendFormat": "{{pod}} - {{container}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 8
+            }
+          },
+          {
+            "id": 4,
+            "title": "Container Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(container_memory_usage_bytes{container!=\"\"}) by (pod, container)",
+                "legendFormat": "{{pod}} - {{container}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 8
+            }
+          },
+          {
+            "id": 5,
+            "title": "Pod Network I/O",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(container_network_receive_bytes_total{container!=\"\"}[5m])) by (pod)",
+                "legendFormat": "{{pod}} - Receive"
+              },
+              {
+                "expr": "sum(rate(container_network_transmit_bytes_total{container!=\"\"}[5m])) by (pod)",
+                "legendFormat": "{{pod}} - Transmit"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 16
+            }
+          },
+          {
+            "id": 6,
+            "title": "Pod Disk I/O",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(container_fs_reads_bytes_total{container!=\"\"}[5m])) by (pod)",
+                "legendFormat": "{{pod}} - Read"
+              },
+              {
+                "expr": "sum(rate(container_fs_writes_bytes_total{container!=\"\"}[5m])) by (pod)",
+                "legendFormat": "{{pod}} - Write"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 16
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+  stylehub-application.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "StyleHub Application Monitoring",
+        "tags": ["stylehub", "application", "monitoring"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "StyleHub Pod Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "count(kube_pod_info{namespace=\"stylehub\"})",
+                "legendFormat": "Total Pods"
+              },
+              {
+                "expr": "count(kube_pod_status_phase{namespace=\"stylehub\", phase=\"Running\"})",
+                "legendFormat": "Running"
+              },
+              {
+                "expr": "count(kube_pod_status_phase{namespace=\"stylehub\", phase=\"Failed\"})",
+                "legendFormat": "Failed"
+              },
+              {
+                "expr": "count(kube_pod_status_phase{namespace=\"stylehub\", phase=\"Pending\"})",
+                "legendFormat": "Pending"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "StyleHub Services",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "count(kube_service_info{namespace=\"stylehub\"})",
+                "legendFormat": "Total Services"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 6,
+              "y": 0
+            }
+          },
+          {
+            "id": 3,
+            "title": "StyleHub Deployments",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "count(kube_deployment_info{namespace=\"stylehub\"})",
+                "legendFormat": "Total Deployments"
+              },
+              {
+                "expr": "sum(kube_deployment_status_replicas_available{namespace=\"stylehub\"})",
+                "legendFormat": "Available Replicas"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 12,
+              "y": 0
+            }
+          },
+          {
+            "id": 4,
+            "title": "StyleHub HPA Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=\"stylehub\"}",
+                "legendFormat": "{{horizontalpodautoscaler}} - Current"
+              },
+              {
+                "expr": "kube_horizontalpodautoscaler_spec_target_metric{namespace=\"stylehub\"}",
+                "legendFormat": "{{horizontalpodautoscaler}} - Target"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 18,
+              "y": 0
+            }
+          },
+          {
+            "id": 5,
+            "title": "StyleHub Pod CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"stylehub\", container!=\"\"}[5m])) by (pod)",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 8
+            }
+          },
+          {
+            "id": 6,
+            "title": "StyleHub Pod Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(container_memory_usage_bytes{namespace=\"stylehub\", container!=\"\"}) by (pod)",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 8
+            }
+          },
+          {
+            "id": 7,
+            "title": "StyleHub Pod Restarts",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "increase(kube_pod_container_status_restarts_total{namespace=\"stylehub\"}[1h])",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 16
+            }
+          },
+          {
+            "id": 8,
+            "title": "StyleHub Network Traffic",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(container_network_receive_bytes_total{namespace=\"stylehub\", container!=\"\"}[5m])) by (pod)",
+                "legendFormat": "{{pod}} - Receive"
+              },
+              {
+                "expr": "sum(rate(container_network_transmit_bytes_total{namespace=\"stylehub\", container!=\"\"}[5m])) by (pod)",
+                "legendFormat": "{{pod}} - Transmit"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 16
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+  kubernetes-services.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Kubernetes Services",
+        "tags": ["kubernetes", "services"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Services by Namespace",
+            "type": "piechart",
+            "targets": [
+              {
+                "expr": "count by (namespace) (kube_service_info)",
+                "legendFormat": "{{namespace}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "Service Endpoints",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "kube_endpoint_address_available{endpoint=\"kubernetes\"}",
+                "legendFormat": "{{endpoint}} - Available"
+              },
+              {
+                "expr": "kube_endpoint_address_not_ready{endpoint=\"kubernetes\"}",
+                "legendFormat": "{{endpoint}} - Not Ready"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 0
+            }
+          },
+          {
+            "id": 3,
+            "title": "Service Ports",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "kube_service_spec_port{namespace=\"stylehub\"}",
+                "format": "table",
+                "instant": true
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 8
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+  kubernetes-deployments.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Kubernetes Deployments",
+        "tags": ["kubernetes", "deployments"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Deployment Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "kube_deployment_status_replicas_available{namespace=\"stylehub\"}",
+                "legendFormat": "{{deployment}} - Available"
+              },
+              {
+                "expr": "kube_deployment_status_replicas_desired{namespace=\"stylehub\"}",
+                "legendFormat": "{{deployment}} - Desired"
+              },
+              {
+                "expr": "kube_deployment_status_replicas_unavailable{namespace=\"stylehub\"}",
+                "legendFormat": "{{deployment}} - Unavailable"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "Deployment Conditions",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "kube_deployment_status_condition{namespace=\"stylehub\"}",
+                "format": "table",
+                "instant": true
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 0
+            }
+          },
+          {
+            "id": 3,
+            "title": "Deployment Update Status",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "kube_deployment_status_updated_replicas{namespace=\"stylehub\"}",
+                "legendFormat": "{{deployment}} - Updated"
+              },
+              {
+                "expr": "kube_deployment_status_replicas_available{namespace=\"stylehub\"}",
+                "legendFormat": "{{deployment}} - Available"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 8
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }

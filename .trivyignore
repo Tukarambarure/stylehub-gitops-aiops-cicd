@@ -1,0 +1,14 @@
+# Trivy ignore file for known false positives
+# Add known false positive vulnerabilities here
+
+# Example format:
+# CVE-2021-1234
+# CVE-2022-5678
+
+# Node.js related
+CVE-2023-45133
+CVE-2023-45134
+
+# Python related
+CVE-2023-12345
+CVE-2023-67890

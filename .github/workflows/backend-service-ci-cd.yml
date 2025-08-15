@@ -1,0 +1,221 @@
+name: Backend Service CI/CD Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        description: 'Name of the backend service'
+        required: true
+        type: string
+      service-path:
+        description: 'Path to the service directory'
+        required: true
+        type: string
+      service-port:
+        description: 'Port number for the service'
+        required: true
+        type: string
+      dockerfile-path:
+        description: 'Path to Dockerfile'
+        required: true
+        type: string
+        default: 'backend/${{ inputs.service-name }}/Dockerfile'
+      requirements-path:
+        description: 'Path to requirements.txt'
+        required: true
+        type: string
+        default: 'backend/${{ inputs.service-name }}/requirements.txt'
+
+env:
+  DOCKER_REGISTRY: docker.io
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  # Code Quality Analysis
+  code-quality:
+    name: Backend Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.service-path }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ${{ inputs.requirements-path }}
+          pip install flake8 black isort mypy pytest pytest-cov bandit
+
+      - name: Run linting
+        working-directory: ${{ inputs.service-path }}
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          black --check .
+          isort --check-only .
+
+      - name: Run type checking
+        working-directory: ${{ inputs.service-path }}
+        run: mypy .
+
+      - name: Run security linting
+        working-directory: ${{ inputs.service-path }}
+        run: bandit -r . -f json -o bandit-report.json
+
+      - name: Run tests
+        working-directory: ${{ inputs.service-path }}
+        run: |
+          pytest --cov=. --cov-report=xml --cov-report=html
+
+      - name: Setup SonarQube Scanner
+        uses: sonarqube-quality-gate-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          scannerHome: ${{ github.workspace }}/sonar-scanner
+          args: >
+            -Dsonar.projectKey=stylehub-${{ inputs.service-name }}
+            -Dsonar.sources=${{ inputs.service-path }}
+            -Dsonar.python.coverage.reportPaths=${{ inputs.service-path }}/coverage.xml
+
+  # Security Scanning
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '${{ inputs.service-path }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # Build and Test
+  build-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    needs: [code-quality, security-scan]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.service-path }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ${{ inputs.requirements-path }}
+
+      - name: Run tests
+        working-directory: ${{ inputs.service-path }}
+        run: pytest --cov=. --cov-report=xml
+
+      - name: Build Docker image
+        working-directory: ${{ inputs.service-path }}
+        run: |
+          docker build -t $DOCKER_REGISTRY/${{ secrets.DOCKER_USERNAME }}/stylehub-${{ inputs.service-name }}:$IMAGE_TAG -f ${{ inputs.dockerfile-path }} .
+          docker build -t $DOCKER_REGISTRY/${{ secrets.DOCKER_USERNAME }}/stylehub-${{ inputs.service-name }}:latest -f ${{ inputs.dockerfile-path }} .
+
+      - name: Run Trivy vulnerability scanner on image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '$DOCKER_REGISTRY/${{ secrets.DOCKER_USERNAME }}/stylehub-${{ inputs.service-name }}:$IMAGE_TAG'
+          format: 'sarif'
+          output: 'trivy-image-results.sarif'
+
+      - name: Upload Trivy image scan results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-image-results.sarif'
+
+  # Deploy to EKS
+  deploy:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    needs: [build-test]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name ${{ secrets.EKS_CLUSTER_NAME }} --region ${{ secrets.AWS_REGION }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push Docker image
+        run: |
+          docker push $DOCKER_REGISTRY/${{ secrets.DOCKER_USERNAME }}/stylehub-${{ inputs.service-name }}:$IMAGE_TAG
+          docker push $DOCKER_REGISTRY/${{ secrets.DOCKER_USERNAME }}/stylehub-${{ inputs.service-name }}:latest
+
+      - name: Update image tag in kustomization
+        run: |
+          sed -i "s/newTag: \${IMAGE_TAG}/newTag: $IMAGE_TAG/g" kubernetes/kustomization.yaml
+          sed -i "s/\${DOCKER_USERNAME}/${{ secrets.DOCKER_USERNAME }}/g" kubernetes/kustomization.yaml
+
+      - name: Deploy to Kubernetes
+        run: |
+          kubectl apply -k kubernetes/${{ inputs.service-name }}/
+          kubectl rollout status deployment/stylehub-${{ inputs.service-name }} -n stylehub --timeout=300s
+
+      - name: Health check
+        run: |
+          kubectl wait --for=condition=ready pod -l app=stylehub-${{ inputs.service-name }} -n stylehub --timeout=300s
+          kubectl get pods -n stylehub -l app=stylehub-${{ inputs.service-name }}
+
+  # Notify
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: always()
+    steps:
+      - name: Notify Slack on success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: '✅ ${{ inputs.service-name }} deployment successful!'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: '❌ ${{ inputs.service-name }} deployment failed!'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

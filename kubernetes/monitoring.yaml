@@ -1,0 +1,105 @@
+# Prometheus ServiceMonitor for application metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: stylehub-monitor
+  namespace: stylehub
+  labels:
+    app: stylehub
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: stylehub
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+---
+# Prometheus Rule for alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: stylehub-alerts
+  namespace: stylehub
+  labels:
+    app: stylehub
+    component: monitoring
+spec:
+  groups:
+  - name: stylehub.rules
+    rules:
+    - alert: HighCPUUsage
+      expr: container_cpu_usage_seconds_total{namespace="stylehub"} > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU usage detected"
+        description: "Container {{ $labels.container }} has high CPU usage"
+    - alert: HighMemoryUsage
+      expr: container_memory_usage_bytes{namespace="stylehub"} > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage detected"
+        description: "Container {{ $labels.container }} has high memory usage"
+    - alert: PodDown
+      expr: up{namespace="stylehub"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod is down"
+        description: "Pod {{ $labels.pod }} is down"
+---
+# Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: stylehub
+  labels:
+    app: stylehub
+    component: monitoring
+data:
+  stylehub-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "StyleHub Application Dashboard",
+        "panels": [
+          {
+            "title": "CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(container_cpu_usage_seconds_total{namespace=\"stylehub\"}[5m])",
+                "legendFormat": "{{container}}"
+              }
+            ]
+          },
+          {
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "container_memory_usage_bytes{namespace=\"stylehub\"}",
+                "legendFormat": "{{container}}"
+              }
+            ]
+          },
+          {
+            "title": "HTTP Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total{namespace=\"stylehub\"}[5m])",
+                "legendFormat": "{{service}}"
+              }
+            ]
+          }
+        ]
+      }
+    }

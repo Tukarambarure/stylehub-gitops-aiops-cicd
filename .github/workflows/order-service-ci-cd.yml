@@ -1,0 +1,24 @@
+name: Order Service CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/order-service/**'
+      - 'kubernetes/order-service/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/order-service/**'
+      - 'kubernetes/order-service/**'
+
+jobs:
+  order-service:
+    uses: ./.github/workflows/backend-service-ci-cd.yml
+    with:
+      service-name: order-service
+      service-path: backend/order-service
+      service-port: "8084"
+      dockerfile-path: backend/order-service/Dockerfile
+      requirements-path: backend/order-service/requirements.txt
+    secrets: inherit

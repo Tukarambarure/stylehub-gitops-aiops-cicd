@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: stylehub-product-service
+  namespace: stylehub
+  labels:
+    app: stylehub-product-service
+    component: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8081
+    targetPort: 8081
+    protocol: TCP
+    name: http
+  selector:
+    app: stylehub-product-service

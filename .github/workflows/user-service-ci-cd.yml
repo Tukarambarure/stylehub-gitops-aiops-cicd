@@ -1,0 +1,24 @@
+name: User Service CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/user-service/**'
+      - 'kubernetes/user-service/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/user-service/**'
+      - 'kubernetes/user-service/**'
+
+jobs:
+  user-service:
+    uses: ./.github/workflows/backend-service-ci-cd.yml
+    with:
+      service-name: user-service
+      service-path: backend/user-service
+      service-port: "8082"
+      dockerfile-path: backend/user-service/Dockerfile
+      requirements-path: backend/user-service/requirements.txt
+    secrets: inherit

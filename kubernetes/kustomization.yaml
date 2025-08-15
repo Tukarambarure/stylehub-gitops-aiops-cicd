@@ -1,0 +1,54 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: stylehub
+
+resources:
+  - namespace.yaml
+  - configmaps.yaml
+  - secrets.yaml
+  - eks-storage-class.yaml
+  - eks-load-balancer.yaml
+  - database.yaml
+  - redis.yaml
+  - monitoring.yaml
+  - network-policy.yaml
+  - ui/deployment.yaml
+  - ui/service.yaml
+  - ui/ingress.yaml
+  - ui/hpa.yaml
+  - product-service/deployment.yaml
+  - product-service/service.yaml
+  - product-service/hpa.yaml
+  - user-service/deployment.yaml
+  - user-service/service.yaml
+  - user-service/hpa.yaml
+  - cart-service/deployment.yaml
+  - cart-service/service.yaml
+  - cart-service/hpa.yaml
+  - order-service/deployment.yaml
+  - order-service/service.yaml
+  - order-service/hpa.yaml
+
+images:
+  - name: ${DOCKER_USERNAME}/stylehub-ui
+    newTag: ${IMAGE_TAG}
+  - name: ${DOCKER_USERNAME}/stylehub-product-service
+    newTag: ${IMAGE_TAG}
+  - name: ${DOCKER_USERNAME}/stylehub-user-service
+    newTag: ${IMAGE_TAG}
+  - name: ${DOCKER_USERNAME}/stylehub-cart-service
+    newTag: ${IMAGE_TAG}
+  - name: ${DOCKER_USERNAME}/stylehub-order-service
+    newTag: ${IMAGE_TAG}
+
+commonLabels:
+  app: stylehub
+  environment: production
+  managed-by: kustomize
+
+patches:
+  - path: patches/namespace-patch.yaml
+    target:
+      kind: Namespace
+      name: stylehub

@@ -1,0 +1,180 @@
+---
+# StyleHub Main Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stylehub
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: stylehub
+    app.kubernetes.io/part-of: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-username/stylehub.git
+    targetRevision: HEAD
+    path: kubernetes
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stylehub
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+  revisionHistoryLimit: 10
+---
+# StyleHub UI Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stylehub-ui
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: stylehub-ui
+    app.kubernetes.io/part-of: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-username/stylehub.git
+    targetRevision: HEAD
+    path: kubernetes/ui
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stylehub
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+  revisionHistoryLimit: 5
+---
+# StyleHub Product Service Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stylehub-product-service
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: stylehub-product-service
+    app.kubernetes.io/part-of: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-username/stylehub.git
+    targetRevision: HEAD
+    path: kubernetes/product-service
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stylehub
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+  revisionHistoryLimit: 5
+---
+# StyleHub User Service Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stylehub-user-service
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: stylehub-user-service
+    app.kubernetes.io/part-of: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-username/stylehub.git
+    targetRevision: HEAD
+    path: kubernetes/user-service
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stylehub
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+  revisionHistoryLimit: 5
+---
+# StyleHub Cart Service Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stylehub-cart-service
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: stylehub-cart-service
+    app.kubernetes.io/part-of: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-username/stylehub.git
+    targetRevision: HEAD
+    path: kubernetes/cart-service
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stylehub
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+  revisionHistoryLimit: 5
+---
+# StyleHub Order Service Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: stylehub-order-service
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/name: stylehub-order-service
+    app.kubernetes.io/part-of: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-username/stylehub.git
+    targetRevision: HEAD
+    path: kubernetes/order-service
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: stylehub
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+  revisionHistoryLimit: 5

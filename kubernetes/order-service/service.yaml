@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: stylehub-order-service
+  namespace: stylehub
+  labels:
+    app: stylehub-order-service
+    component: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8084
+    targetPort: 8084
+    protocol: TCP
+    name: http
+  selector:
+    app: stylehub-order-service

@@ -1,0 +1,24 @@
+name: Cart Service CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/cart-service/**'
+      - 'kubernetes/cart-service/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/cart-service/**'
+      - 'kubernetes/cart-service/**'
+
+jobs:
+  cart-service:
+    uses: ./.github/workflows/backend-service-ci-cd.yml
+    with:
+      service-name: cart-service
+      service-path: backend/cart-service
+      service-port: "8083"
+      dockerfile-path: backend/cart-service/Dockerfile
+      requirements-path: backend/cart-service/requirements.txt
+    secrets: inherit

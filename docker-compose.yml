@@ -1,0 +1,82 @@
+version: '3.8'  # Compose file format version
+
+services:
+  ui:  # Frontend React app served by Nginx
+    build:
+      context: .  # Build from project root
+      dockerfile: Dockerfile  # Use root Dockerfile
+      args:  # Build-time env for Vite
+        - VITE_USER_SERVICE_URL=http://localhost:5002
+        - VITE_PRODUCT_SERVICE_URL=http://localhost:5001
+        - VITE_CART_SERVICE_URL=http://localhost:5003
+        - VITE_ORDER_SERVICE_URL=http://localhost:5004
+    image: stylehub-ui:latest  # Tag the built image
+    ports:
+      - "8080:80"  # Host:Container - expose UI on http://localhost:8080
+    depends_on:
+      - user-service  # Ensure user-service is started before ui (no healthcheck gate)
+    networks:
+      - stylehub-network  # Shared network for inter-service communication
+
+  product-service:  # Catalog service
+    build: ./backend/product-service  # Build from its Dockerfile
+    ports:
+      - "5001:5001"  # Expose on host for local dev and UI calls
+    environment:
+      - FLASK_ENV=production  # Hint for Flask config
+      - DATABASE_URL=sqlite:///products.db  # SQLite DB path inside container
+    volumes:
+      - ./backend/product-service/data:/app/data  # Persist DB between runs
+    networks:
+      - stylehub-network
+
+  user-service:  # Auth and user profiles
+    build: ./backend/user-service
+    ports:
+      - "5002:5002"
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=sqlite:///users.db
+      - JWT_SECRET_KEY=your-secret-key-change-in-production  # Replace in production
+    volumes:
+      - ./backend/user-service/data:/app/data
+    networks:
+      - stylehub-network
+
+  cart-service:  # Shopping cart service
+    build: ./backend/cart-service
+    ports:
+      - "5003:5003"
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=sqlite:///cart.db
+      - PRODUCT_SERVICE_URL=http://product-service:5001  # Internal DNS via compose network
+    volumes:
+      - ./backend/cart-service/data:/app/data
+    networks:
+      - stylehub-network
+    depends_on:
+      - product-service  # Start product-service before cart-service
+
+  order-service:  # Orders API
+    build: ./backend/order-service
+    ports:
+      - "5004:5004"
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=sqlite:///orders.db
+      - CART_SERVICE_URL=http://cart-service:5003  # Internal URL via network DNS
+      - USER_SERVICE_URL=http://user-service:5002
+    volumes:
+      - ./backend/order-service/data:/app/data
+    networks:
+      - stylehub-network
+    depends_on:
+      - cart-service  # Ensure dependencies start first
+      - user-service
+
+networks:
+  stylehub-network:  # Shared bridge network for all services
+    driver: bridge
+
+
