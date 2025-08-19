@@ -1,6 +1,6 @@
 
 # E-Commerce-application-CICD
-This repository contains e-commerce end-to-end application CICD
+StyleHub is a full-stack e-commerce application built with modern technologies following microservices architecture and DevOps best practices. The project demonstrates a complete CI/CD pipeline from development to production deployment on AWS EKS.
 
 <img width="2548" height="1424" alt="image" src="https://github.com/user-attachments/assets/9da9d32f-3f2b-4164-bb22-67493846fce1" />
 <img width="2536" height="814" alt="image" src="https://github.com/user-attachments/assets/445856df-50a9-4a8e-8cf0-5e6d1b7b279e" />
